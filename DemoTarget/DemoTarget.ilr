@@ -1,0 +1,23 @@
+ldstr bad.icon
+=========
+ldarg.0
+ldstr	"Demo App"
+==========
+ldloc.0
+ldloc.1
+sub
+stloc.2
+============
+call MainForm::badMethod()
+###########
+ldstr good.icon
+========
+ldarg.0
+ldstr	"Demo App || Cracked"
+=================
+ldloc.0
+ldloc.1
+add
+stloc.2
+=======================
+call 0x06000004
