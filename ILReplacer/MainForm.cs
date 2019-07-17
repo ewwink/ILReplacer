@@ -238,7 +238,7 @@ namespace ILReplacer
                                 for (int k = 0; k < blockFind.Count; k++)
                                 {
                                     var newOperand = BlocksReplace[B][k].Operand;
-                                    if (method.Body.Instructions[j].OpCode == OpCodes.Call)
+                                    if (BlocksReplace[B][k].OpCode == OpCodes.Call)
                                         newOperand = module.ResolveToken((uint)BlocksReplace[B][k].Operand);
 
                                     logInfo += string.Format("#{0} --> {1}  {2}  ==>  {3}  {4}\r\n",
