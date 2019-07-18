@@ -1,4 +1,5 @@
 
+
 # ILReplacer (.Net Patcher)
 
 **ILReplacer** is a Patcher or simple tool to find and replace .Net application IL code instructions such as `ldstr, ldc.i4, brfalse.s, etc..`  It support managed and mixed mode assembly.
@@ -10,32 +11,50 @@ Download ILReplacer from [Release](https://github.com/ewwink/ILReplacer//release
 
 ## Docs
  **The Blocks**
-The blocks instruction is like below
+The blocks instruction format is like the following
 
     OpCode operand
     OpCode
-    
-Example:
-   
-    ldstr "My App"
-    ldc.i4.0
+    =
 
-For replacing multiple blocks use the `=======` as separator
+The symbol `=` is used in `Replace` input, it mean do not change original Opcode and Operand.
 
-    ldstr "My App"
-    ldc.i4.0
+**BLocks Example**:
+
+Change App name for DemoTarget.exe from `Demo App` to `Demo App || Cracked`
+
+In `Find` textbox add:
+
+    ldarg.0
+    ldstr "Demo App"
+
+In `Replace` textbox add
+
+    ldarg.0
+    ldstr "Demo App || Cracked"
+
+or use `=` to keep `ldarg.0` unchanged
+
+    =
+    ldstr "Demo App || Cracked"
+
+ **Multiple Blocks**
+For replacing multiple blocks use the `=======` (minimum 3 characters) as separator
+
+    ldarg.0
+    ldstr "Demo App"
     ===========
-    ldstr Other Text
-    ldc.i4.0
+    ldarg.0
+    ldstr Other String
 
-note: double quote is optional
+Note: the double quote in operand is optional
 
  **Find Blocks**
  If operand is not empty it will be used to compare with original operand, for example:
  
     call badMethod
 
-will search if operand **contains** method name `badMethod`
+will search if Operand **contains** method name `badMethod`
 
  **Replace Blocks**
  If the OpCode is a `Call` the operand have to be Hex number or MDToken like `0x06000001` or `06000001` and not method Name, example
@@ -43,6 +62,9 @@ will search if operand **contains** method name `badMethod`
     call 0x06000001
 
 To know MDToken for method you can use [DnSpy](https://github.com/0xd4d/dnSpy) 
+
+**Save and Load Blocks**
+You can save and load the blocks to file, just click the **Menu** on the top.
 
 ### Screenshot
 ![ilreplacer](https://user-images.githubusercontent.com/760764/61352933-c67bac80-a898-11e9-8402-cf84f949ad90.jpg)

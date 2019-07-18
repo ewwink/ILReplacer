@@ -238,16 +238,25 @@ namespace ILReplacer
                                 for (int k = 0; k < blockFind.Count; k++)
                                 {
                                     var newOperand = BlocksReplace[B][k].Operand;
-                                    if (BlocksReplace[B][k].OpCode == OpCodes.Call)
-                                        newOperand = module.ResolveToken((uint)BlocksReplace[B][k].Operand);
-
-                                    logInfo += string.Format("#{0} --> {1}  {2}  ==>  {3}  {4}\r\n",
+                                    if(newOperand.ToString() == "=")
+                                    {
+                                        logInfo += string.Format("#{0} --> {1}  {2}  ==>  No Change\r\n",
                                         j, instrs[j].OpCode, instrs[j].Operand,
                                         BlocksReplace[B][k].OpCode, newOperand);
+                                    }
+                                    else
+                                    {
+                                        if (BlocksReplace[B][k].OpCode == OpCodes.Call)
+                                            newOperand = module.ResolveToken((uint)BlocksReplace[B][k].Operand);
 
-                                    method.Body.Instructions[j].OpCode = BlocksReplace[B][k].OpCode;
-                                    method.Body.Instructions[j].Operand = newOperand;
- 
+                                        logInfo += string.Format("#{0} --> {1}  {2}  ==>  {3}  {4}\r\n",
+                                            j, instrs[j].OpCode, instrs[j].Operand,
+                                            BlocksReplace[B][k].OpCode, newOperand);
+
+                                        method.Body.Instructions[j].OpCode = BlocksReplace[B][k].OpCode;
+                                        method.Body.Instructions[j].Operand = newOperand;
+                                    }
+
                                     j++;
                                 }
 
@@ -364,6 +373,14 @@ namespace ILReplacer
                         OpCode opCode = null;
                         Instruction instr = new Instruction();
                         string[] toInstr = line.Trim().Split(new char[] { ' ', '\t' }, 2);
+
+                        if(toInstr[0].Trim() == "=")
+                        {
+                            instr.Operand = "=";
+                            instructions.Add(instr);
+                            continue;
+                        }
+
                         opCode = GetOpCodeFromString(toInstr[0]);
 
                         if (opCode != null)
