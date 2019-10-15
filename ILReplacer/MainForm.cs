@@ -14,19 +14,24 @@ namespace ILReplacer
 {
     public partial class MainForm : Form
     {
+        #region Variable
+
         public bool IsRunning;
         public bool PreserveAllFlags;
         public bool ShowLogs = true;
+        public int EditedMethodsCount;
+        public int ReplacedBlocks;
         public List<List<Instruction>> BlocksFind = new List<List<Instruction>>();
         public List<List<Instruction>> BlocksReplace = new List<List<Instruction>>();
+        public ModuleDefMD Module;
         public string InputFindText = "";
         public string InputReplaceText = "";
-        public string ModuleName = "";
-        public ModuleDefMD Module;
-        public int ReplacedBlocks;
-        public int EditedMethodsCount;
         public string LogInfo = "";
+        public string ModuleName = "";
 
+        #endregion
+
+        #region Form
         public MainForm()
         {
             InitializeComponent();
@@ -36,6 +41,15 @@ namespace ILReplacer
         {
             Text = $@"ILReplacer v{Application.ProductVersion} | by ewwink";
         }
+
+        private void MainForm_Resize(object sender, EventArgs e)
+        {
+            txtFile.Size = new Size(Size.Width - 214, txtFile.Size.Height);
+        }
+
+        #endregion
+
+        #region File
 
         private void txtFile_DragDrop(object sender, DragEventArgs e)
         {
@@ -48,20 +62,6 @@ namespace ILReplacer
         {
             e.Effect = e.Data.GetDataPresent(DataFormats.FileDrop) ? DragDropEffects.Copy : DragDropEffects.None;
         }
-
-        private void MainForm_Resize(object sender, EventArgs e)
-        {
-            txtFile.Size = new Size(Size.Width - 214, txtFile.Size.Height);
-        }
-
-        private void SelectAll(object sender, KeyEventArgs e)
-        {
-            if (e.Control && e.KeyCode == Keys.A)
-            {
-                ((TextBox) sender)?.SelectAll();
-            }
-        }
-
         private void btnOpenFile_Click(object sender, EventArgs e)
         {
             var ofd = new OpenFileDialog
@@ -76,26 +76,96 @@ namespace ILReplacer
             }
         }
 
-        private void EnableControl(bool isEnable)
+        #endregion
+
+        #region Textbox
+
+        private void txtInputFind_TextChanged(object sender, EventArgs e)
         {
-            Invoke((MethodInvoker)delegate
-            {
-                txtFile.Enabled = txtInputFind.Enabled = txtInputReplace.Enabled = isEnable;
-            });
+            var blockCount = Regex.Split(txtInputFind.Text, @"^={3,}", RegexOptions.Multiline).Length;
+            lblFindBlocks.Text = @"Find Blocks: " + blockCount;
         }
 
-        private void WriteStatus(string text)
+        private void txtInputReplace_TextChanged(object sender, EventArgs e)
         {
-            Invoke((MethodInvoker)delegate
-            {
-                lblStatus.Text = text;
-            });
+            var blockCount = Regex.Split(txtInputReplace.Text, @"^={3,}", RegexOptions.Multiline).Length;
+            lblReplaceBlocks.Text = @"Replace With Blocks: " + blockCount;
         }
+
+        private void SelectAll(object sender, KeyEventArgs e)
+        {
+            if (e.Control && e.KeyCode == Keys.A)
+            {
+                ((TextBox)sender)?.SelectAll();
+            }
+        }
+
+        #endregion
+
+        #region Checkbox
 
         private void cboxForceSave_CheckedChanged(object sender, EventArgs e)
         {
             PreserveAllFlags = cboxFlagAll.Checked;
         }
+        private void cboxShowLog_CheckedChanged(object sender, EventArgs e)
+        {
+            ShowLogs = cboxShowLog.Checked;
+        }
+
+        #endregion
+
+        #region Menu
+
+        private void MenuExit_Click(object sender, EventArgs e)
+        {
+            Application.Exit();
+        }
+
+        private void menuSaveBLocks_Click(object sender, EventArgs e)
+        {
+            var sfd = new SaveFileDialog
+            {
+                Title = @"Save Blocks File",
+                Filter = @"ILReplace files|*.ilr|Text files|*.txt|All files (*.*)|*.*"
+            };
+
+            if (sfd.ShowDialog() == DialogResult.OK)
+            {
+                var blocksText = txtInputFind.Text.Trim() + "\r\n###########\r\n" + txtInputReplace.Text.Trim();
+                File.WriteAllText(sfd.FileName, blocksText);
+                WriteStatus("Blocks Saved to: " + sfd.FileName);
+            }
+        }
+
+        private void menuLoadBLocks_Click(object sender, EventArgs e)
+        {
+            var ofd = new OpenFileDialog
+            {
+                Title = @"Select Blocks File",
+                Filter = @"ILReplace files|*.ilr|Text files|*.txt|All files (*.*)|*.*"
+            };
+
+            if (ofd.ShowDialog() == DialogResult.OK)
+            {
+                var blocksText = File.ReadAllText(ofd.FileName)
+                    .Split(new[] { "###########" }, StringSplitOptions.None);
+                if (blocksText.Length > 1)
+                {
+                    txtInputFind.Text = blocksText[0].Trim();
+                    txtInputReplace.Text = blocksText[1].Trim();
+                    WriteStatus("Blocks loaded from: " + ofd.FileName);
+                }
+                else
+                {
+                    WriteStatus("Blocks file empty or invalid: " + ofd.FileName);
+                }
+            }
+        }
+
+        #endregion
+
+        #region Replace
 
         private void btnReplace_Click(object sender, EventArgs e)
         {
@@ -131,290 +201,12 @@ namespace ILReplacer
             }.Start();
         }
 
-        private void ShowFormLog(string text)
+        private void EnableControl(bool isEnable)
         {
             Invoke((MethodInvoker)delegate
             {
-                ShowInTaskbar = false;
-                var frmLog = new FormLog(this) {txtFormLog = {Text = text}};
-                frmLog.ShowDialog();
-                ShowInTaskbar = true;
+                txtFile.Enabled = txtInputFind.Enabled = txtInputReplace.Enabled = isEnable;
             });
-        }
-
-        private OpCode GetOpCodeFromString(string str)
-        {
-            var opString = str.Trim().ToLower().Replace(".", "_");
-            opString = char.ToUpper(opString[0]) + opString.Substring(1);
-            opString = Regex.Replace(opString, @"_[a-z]", (Match match) => match.ToString().ToUpper());
-            var opCodeResult = typeof(OpCodes).GetField(opString);
-            if (opCodeResult != null)
-                return (OpCode)opCodeResult.GetValue(null);
-            return null;
-        }
-
-        private void ReplaceInstructions()
-        {
-            var currentBlockNum = "";
-
-            foreach (var type in Module.GetTypes())
-            {
-                foreach (var method in type.Methods)
-                {
-                    var isNewMethod = true;
-                    if (!method.HasBody)
-                        continue;
-                    var instrs = method.Body.Instructions;
-                    for (var i = 0; i < instrs.Count; i++)
-                    {
-                        // start replace
-                        for (var b = 0; b < BlocksFind.Count; b++)
-                        {
-                            var isMatched = false;
-                            var j = i;
-                            var blockFind = BlocksFind[b];
-
-                            // check
-                            foreach (var t in blockFind)
-                            {
-                                if (instrs[j].OpCode == t.OpCode)
-                                {
-                                    if (t.OpCode == OpCodes.Call)
-                                    {
-                                        if (instrs[j].Operand == null)
-                                        {
-                                            isMatched = false;
-                                        }
-                                        else
-                                        {
-                                            isMatched = instrs[j].Operand.ToString().Contains(t.Operand.ToString());
-                                        }
-                                    }
-                                    else if (t.Operand != null)
-                                    {
-                                        isMatched = instrs[j].Operand.ToString().Contains(t.Operand.ToString());
-                                    }
-                                    else
-                                        isMatched = true;
-                                }
-                                else
-                                {
-                                    isMatched = false;
-                                    break;
-                                }
-                                j++;
-                            }
-
-                            if (isMatched)
-                            {
-                                if (isNewMethod)
-                                {
-                                    isNewMethod = false;
-                                    EditedMethodsCount++;
-                                    LogInfo +=
-                                        $"==========================================\r\nMethod: {method.FullName} || MDToken: 0x06{method.MDToken.Rid:X6}\r\n";
-                                    currentBlockNum = "";
-                                }
-                                if (currentBlockNum != (b + 1).ToString())
-                                {
-                                    currentBlockNum = (b + 1).ToString();
-                                    LogInfo += $"\r\nBlock Find and Replace: {(b + 1)}\r\n";
-                                }
-
-                                // Do replace
-                                j = i;
-                                for (var k = 0; k < blockFind.Count; k++)
-                                {
-                                    var newOperand = BlocksReplace[b][k].Operand;
-                                    if(newOperand.ToString() == "=")
-                                    {
-                                        LogInfo +=
-                                            $"#{j} --> {instrs[j].OpCode}  {instrs[j].Operand}  ==>  No Change\r\n";
-                                    }
-                                    else
-                                    {
-                                        if (BlocksReplace[b][k].OpCode == OpCodes.Call)
-                                            newOperand = Module.ResolveToken((uint)BlocksReplace[b][k].Operand);
-
-                                        LogInfo +=
-                                            $"#{j} --> {instrs[j].OpCode}  {instrs[j].Operand}  ==>  {BlocksReplace[b][k].OpCode}  {newOperand}\r\n";
-
-                                        method.Body.Instructions[j].OpCode = BlocksReplace[b][k].OpCode;
-                                        method.Body.Instructions[j].Operand = newOperand;
-                                    }
-
-                                    j++;
-                                }
-
-                                ReplacedBlocks++;
-                                // set method.Body.Instructions loop position
-                                i = j;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        private bool CheckBlocks()
-        {
-            var isError = false;
-            var logInfo = "";
-            var blocksToFind = new List<List<string>>();
-            var blocksToReplace = new List<List<string>>();
-
-            foreach (var block in Regex.Split(InputFindText, @"^={3,}", RegexOptions.Multiline))
-            {
-                var instrs = block.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries).ToList();
-                blocksToFind.Add(instrs);
-            }
-
-            foreach (var block in Regex.Split(InputReplaceText, @"^={3,}", RegexOptions.Multiline))
-            {
-                var instrs = block.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries).ToList();
-                blocksToReplace.Add(instrs);
-            }
-
-            if (blocksToFind.Count != blocksToReplace.Count)
-            {
-                MessageBox.Show(
-                    $@"Size of Blocks Find and Replace not Match\r\nBlocks Find: {blocksToFind.Count}\r\nBlocks Replace: {blocksToReplace.Count}",
-                    @"Blocks Error!", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                isError = true;
-            }
-
-            if (!isError)
-            {
-                for (var i = 0; i < blocksToFind.Count; i++)
-                {
-                    if (blocksToFind[i].Count != blocksToReplace[i].Count)
-                    {
-                        logInfo +=
-                            $"Error, Block {i + 1} has different size\r\nFind ({blocksToFind[i].Count}):\r\n{string.Join("\r\n", blocksToFind[i].ToArray())}\r\n\r\nReplace ({blocksToReplace[i].Count}):\r\n{string.Join("\r\n", blocksToReplace[i].ToArray())}\r\n================================================\r\n";
-
-                        isError = true;
-                    }
-                }
-            }
-
-            try
-            {
-                Module = ModuleDefMD.Load(ModuleName);
-            }
-            catch
-            {
-                WriteStatus($"Error Loading \"{Path.GetFileName(ModuleName)}\" Maybe not .NET Executable");
-                isError = true;
-            }
-
-            if (!isError)
-            {
-                for (var i = 0; i < blocksToFind.Count; i++)
-                {
-                    var block = blocksToFind[i];
-                    var instructions = new List<Instruction>();
-                    for (var j = 0; j < block.Count; j++)
-                    {
-                        var line = block[j];
-                        OpCode opCode = null;
-                        var instr = new Instruction();
-                        var toInstr = line.Trim().Split(new char[] { ' ', '\t' }, 2);
-                        if (toInstr.Length > 0)
-                            opCode = GetOpCodeFromString(toInstr[0]);
-                        if (opCode != null)
-                        {
-                            instr.OpCode = opCode;
-                            if (toInstr.Length == 2)
-                            {
-                                instr.Operand = toInstr[1].Trim().Trim('"');
-                            }
-                            instructions.Add(instr);
-                        }
-                        else
-                        {
-                            logInfo +=
-                                $"\"{toInstr[0]}\" is not valid OpCode, Block Find {i + 1} Line {j + 1}\r\n{line}";
-                            isError = true;
-                        }
-                    }
-
-                    BlocksFind.Add(instructions);
-                }
-            }
-
-            if (!isError)
-            {
-                for (var i = 0; i < blocksToReplace.Count; i++)
-                {
-                    var block = blocksToReplace[i];
-                    var instructions = new List<Instruction>();
-                    for (var j = 0; j < block.Count; j++)
-                    {
-                        var line = block[j];
-                        var instr = new Instruction();
-                        var toInstr = line.Trim().Split(new char[] { ' ', '\t' }, 2);
-
-                        if(toInstr[0].Trim() == "=")
-                        {
-                            instr.Operand = "=";
-                            instructions.Add(instr);
-                            continue;
-                        }
-
-                        var opCode = GetOpCodeFromString(toInstr[0]);
-
-                        if (opCode != null)
-                        {
-                            instr.OpCode = opCode;
-                            if (toInstr.Length == 2)
-                            {
-                                if (opCode == OpCodes.Call)
-                                {
-                                    var mdtoken = toInstr[1].Trim().ToUpper();
-                                    if (mdtoken == "" || !Regex.IsMatch(mdtoken, @"^(0[Xx])?[A-F0-9]{8}$"))
-                                        isError = true;
-                                    else
-                                    {
-                                        var rid = uint.Parse(mdtoken.ToUpper().Replace("0X", ""), System.Globalization.NumberStyles.HexNumber);
-                                        var isMethod = Module.ResolveToken(rid);
-                                        if (isMethod == null)
-                                            isError = true;
-                                        instr.Operand = rid;
-                                    }
-
-                                    if (isError)
-                                        logInfo +=
-                                            $"\"{mdtoken}\" is invalid Operand/MDToken for \"Call\", Block Replace {i + 1} Line {j + 1}\r\nThe value Should be Hex or MDToken like 06000001 or 0x06000001\r\n{line}\r\n";
-                                }
-                                else
-                                    instr.Operand = toInstr[1].Trim().Trim('"');
-                            }
-
-                            instructions.Add(instr);
-                        }
-                        else
-                        {
-                            logInfo +=
-                                $"\"{toInstr[0]}\" is not valid OpCode, Block Replace {i + 1} Line {j + 1}\r\n{line}";
-                            isError = true;
-                        }
-                    }
-
-                    BlocksReplace.Add(instructions);
-                }
-            }
-
-            if (isError)
-            {
-                if (logInfo != "")
-                    ShowFormLog(logInfo);
-                EnableControl(true);
-                IsRunning = false;
-                Module?.Dispose();
-                return false;
-            }
-
-            return true;
         }
 
         private void PrepareReplace()
@@ -495,67 +287,289 @@ namespace ILReplacer
             }
         }
 
-        private void cboxShowLog_CheckedChanged(object sender, EventArgs e)
+        #region Check Blocks
+
+        private bool CheckBlocks()
         {
-            ShowLogs = cboxShowLog.Checked;
+            var isError = false;
+            var logInfo = "";
+
+            var blocksToFind = Regex.Split(InputFindText, @"^={3,}", RegexOptions.Multiline).Select(block => block.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries).ToList()).ToList();
+
+            var blocksToReplace = Regex.Split(InputReplaceText, @"^={3,}", RegexOptions.Multiline).Select(block => block.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries).ToList()).ToList();
+
+            if (blocksToFind.Count != blocksToReplace.Count)
+            {
+                MessageBox.Show(
+                    $@"Size of Blocks Find and Replace not Match\r\nBlocks Find: {blocksToFind.Count}\r\nBlocks Replace: {blocksToReplace.Count}",
+                    @"Blocks Error!", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                isError = true;
+            }
+
+            if (!isError)
+            {
+                for (var i = 0; i < blocksToFind.Count; i++)
+                {
+                    if (blocksToFind[i].Count != blocksToReplace[i].Count)
+                    {
+                        logInfo +=
+                            $"Error, Block {i + 1} has different size\r\nFind ({blocksToFind[i].Count}):\r\n{string.Join("\r\n", blocksToFind[i].ToArray())}\r\n\r\nReplace ({blocksToReplace[i].Count}):\r\n{string.Join("\r\n", blocksToReplace[i].ToArray())}\r\n================================================\r\n";
+
+                        isError = true;
+                    }
+                }
+            }
+
+            try
+            {
+                Module = ModuleDefMD.Load(ModuleName);
+            }
+            catch
+            {
+                WriteStatus($"Error Loading \"{Path.GetFileName(ModuleName)}\" Maybe not .NET Executable");
+                isError = true;
+            }
+
+            if (!isError)
+            {
+                for (var i = 0; i < blocksToFind.Count; i++)
+                {
+                    var block = blocksToFind[i];
+                    var instructions = new List<Instruction>();
+                    for (var j = 0; j < block.Count; j++)
+                    {
+                        var line = block[j];
+                        OpCode opCode = null;
+                        var instr = new Instruction();
+                        var toInstr = line.Trim().Split(new[] { ' ', '\t' }, 2);
+                        if (toInstr.Length > 0)
+                            opCode = GetOpCodeFromString(toInstr[0]);
+                        if (opCode != null)
+                        {
+                            instr.OpCode = opCode;
+                            if (toInstr.Length == 2)
+                            {
+                                instr.Operand = toInstr[1].Trim().Trim('"');
+                            }
+                            instructions.Add(instr);
+                        }
+                        else
+                        {
+                            logInfo +=
+                                $"\"{toInstr[0]}\" is not valid OpCode, Block Find {i + 1} Line {j + 1}\r\n{line}";
+                            isError = true;
+                        }
+                    }
+
+                    BlocksFind.Add(instructions);
+                }
+            }
+
+            if (!isError)
+            {
+                for (var i = 0; i < blocksToReplace.Count; i++)
+                {
+                    var block = blocksToReplace[i];
+                    var instructions = new List<Instruction>();
+                    for (var j = 0; j < block.Count; j++)
+                    {
+                        var line = block[j];
+                        var instr = new Instruction();
+                        var toInstr = line.Trim().Split(new[] { ' ', '\t' }, 2);
+
+                        if (toInstr[0].Trim() == "=")
+                        {
+                            instr.Operand = "=";
+                            instructions.Add(instr);
+                            continue;
+                        }
+
+                        var opCode = GetOpCodeFromString(toInstr[0]);
+
+                        if (opCode != null)
+                        {
+                            instr.OpCode = opCode;
+                            if (toInstr.Length == 2)
+                            {
+                                if (opCode == OpCodes.Call)
+                                {
+                                    var mdToken = toInstr[1].Trim().ToUpper();
+                                    if (mdToken == "" || !Regex.IsMatch(mdToken, @"^(0[Xx])?[A-F0-9]{8}$"))
+                                        isError = true;
+                                    else
+                                    {
+                                        var rid = uint.Parse(mdToken.ToUpper().Replace("0X", ""), System.Globalization.NumberStyles.HexNumber);
+                                        var isMethod = Module.ResolveToken(rid);
+                                        if (isMethod == null)
+                                            isError = true;
+                                        instr.Operand = rid;
+                                    }
+
+                                    if (isError)
+                                        logInfo +=
+                                            $"\"{mdToken}\" is invalid Operand/MDToken for \"Call\", Block Replace {i + 1} Line {j + 1}\r\nThe value Should be Hex or MDToken like 06000001 or 0x06000001\r\n{line}\r\n";
+                                }
+                                else
+                                    instr.Operand = toInstr[1].Trim().Trim('"');
+                            }
+
+                            instructions.Add(instr);
+                        }
+                        else
+                        {
+                            logInfo +=
+                                $"\"{toInstr[0]}\" is not valid OpCode, Block Replace {i + 1} Line {j + 1}\r\n{line}";
+                            isError = true;
+                        }
+                    }
+
+                    BlocksReplace.Add(instructions);
+                }
+            }
+
+            if (isError)
+            {
+                if (logInfo != "")
+                    ShowFormLog(logInfo);
+                EnableControl(true);
+                IsRunning = false;
+                Module?.Dispose();
+                return false;
+            }
+
+            return true;
         }
 
-        private void MenuExit_Click(object sender, EventArgs e)
+        private static OpCode GetOpCodeFromString(string str)
         {
-            Application.Exit();
+            var opString = str.Trim().ToLower().Replace(".", "_");
+            opString = char.ToUpper(opString[0]) + opString.Substring(1);
+            opString = Regex.Replace(opString, @"_[a-z]", match => match.ToString().ToUpper());
+            var opCodeResult = typeof(OpCodes).GetField(opString);
+            if (opCodeResult != null)
+                return (OpCode)opCodeResult.GetValue(null);
+            return null;
         }
 
-        private void menuSaveBLocks_Click(object sender, EventArgs e)
+        #endregion
+        
+        private void WriteStatus(string text)
         {
-            var sfd = new SaveFileDialog
+            Invoke((MethodInvoker)delegate
             {
-                Title = @"Save Blocks File",
-                Filter = @"ILReplace files|*.ilr|Text files|*.txt|All files (*.*)|*.*"
-            };
+                lblStatus.Text = text;
+            });
+        }
 
-            if (sfd.ShowDialog() == DialogResult.OK)
+        private void ReplaceInstructions()
+        {
+            var currentBlockNum = "";
+
+            foreach (var type in Module.GetTypes())
             {
-                var blocksText = txtInputFind.Text.Trim() + "\r\n###########\r\n" + txtInputReplace.Text.Trim();
-                File.WriteAllText(sfd.FileName, blocksText);
-                WriteStatus("Blocks Saved to: " + sfd.FileName);
+                foreach (var method in type.Methods)
+                {
+                    var isNewMethod = true;
+                    if (!method.HasBody)
+                        continue;
+                    var instructions = method.Body.Instructions;
+                    for (var i = 0; i < instructions.Count; i++)
+                    {
+                        // start replace
+                        for (var b = 0; b < BlocksFind.Count; b++)
+                        {
+                            var isMatched = false;
+                            var j = i;
+                            var blockFind = BlocksFind[b];
+
+                            // check
+                            foreach (var t in blockFind)
+                            {
+                                if (instructions[j].OpCode == t.OpCode)
+                                {
+                                    if (t.OpCode == OpCodes.Call)
+                                    {
+                                        isMatched = instructions[j].Operand != null && instructions[j].Operand.ToString().Contains(t.Operand.ToString());
+                                    }
+                                    else if (t.Operand != null)
+                                    {
+                                        isMatched = instructions[j].Operand.ToString().Contains(t.Operand.ToString());
+                                    }
+                                    else
+                                        isMatched = true;
+                                }
+                                else
+                                {
+                                    isMatched = false;
+                                    break;
+                                }
+                                j++;
+                            }
+
+                            if (isMatched)
+                            {
+                                if (isNewMethod)
+                                {
+                                    isNewMethod = false;
+                                    EditedMethodsCount++;
+                                    LogInfo +=
+                                        $"==========================================\r\nMethod: {method.FullName} || MDToken: 0x06{method.MDToken.Rid:X6}\r\n";
+                                    currentBlockNum = "";
+                                }
+                                if (currentBlockNum != (b + 1).ToString())
+                                {
+                                    currentBlockNum = (b + 1).ToString();
+                                    LogInfo += $"\r\nBlock Find and Replace: {(b + 1)}\r\n";
+                                }
+
+                                // Do replace
+                                j = i;
+                                for (var k = 0; k < blockFind.Count; k++)
+                                {
+                                    var newOperand = BlocksReplace[b][k].Operand;
+                                    if (newOperand.ToString() == "=")
+                                    {
+                                        LogInfo +=
+                                            $"#{j} --> {instructions[j].OpCode}  {instructions[j].Operand}  ==>  No Change\r\n";
+                                    }
+                                    else
+                                    {
+                                        if (BlocksReplace[b][k].OpCode == OpCodes.Call)
+                                            newOperand = Module.ResolveToken((uint)BlocksReplace[b][k].Operand);
+
+                                        LogInfo +=
+                                            $"#{j} --> {instructions[j].OpCode}  {instructions[j].Operand}  ==>  {BlocksReplace[b][k].OpCode}  {newOperand}\r\n";
+
+                                        method.Body.Instructions[j].OpCode = BlocksReplace[b][k].OpCode;
+                                        method.Body.Instructions[j].Operand = newOperand;
+                                    }
+
+                                    j++;
+                                }
+
+                                ReplacedBlocks++;
+                                // set method.Body.Instructions loop position
+                                i = j;
+                            }
+                        }
+                    }
+                }
             }
         }
 
-        private void menuLoadBLocks_Click(object sender, EventArgs e)
+        private void ShowFormLog(string text)
         {
-            var ofd = new OpenFileDialog
+            Invoke((MethodInvoker)delegate
             {
-                Title = @"Select Blocks File",
-                Filter = @"ILReplace files|*.ilr|Text files|*.txt|All files (*.*)|*.*"
-            };
-
-            if (ofd.ShowDialog() == DialogResult.OK)
-            {
-                var blocksText = File.ReadAllText(ofd.FileName)
-                    .Split(new[] { "###########" }, StringSplitOptions.None);
-                if (blocksText.Length > 1)
-                {
-                    txtInputFind.Text = blocksText[0].Trim();
-                    txtInputReplace.Text = blocksText[1].Trim();
-                    WriteStatus("Blocks loaded from: " + ofd.FileName);
-                }
-                else
-                {
-                    WriteStatus("Blocks file empty or invalid: " + ofd.FileName);
-                }
-            }
+                ShowInTaskbar = false;
+                var frmLog = new FormLog(this) { txtFormLog = { Text = text } };
+                frmLog.ShowDialog();
+                ShowInTaskbar = true;
+            });
         }
 
-        private void txtInputFind_TextChanged(object sender, EventArgs e)
-        {
-            var blockCount = Regex.Split(txtInputFind.Text, @"^={3,}", RegexOptions.Multiline).Length;
-            lblFindBlocks.Text = @"Find Blocks: " + blockCount;
-        }
+        #endregion
 
-        private void txtInputReplace_TextChanged(object sender, EventArgs e)
-        {
-            var blockCount = Regex.Split(txtInputReplace.Text, @"^={3,}", RegexOptions.Multiline).Length;
-            lblReplaceBlocks.Text = @"Replace With Blocks: " + blockCount;
-        }
+
     }
 }
