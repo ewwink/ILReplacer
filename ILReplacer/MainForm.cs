@@ -14,18 +14,18 @@ namespace ILReplacer
 {
     public partial class MainForm : Form
     {
-        public bool isRunning = false;
-        public bool PreserveAllFlags = false;
+        public bool IsRunning;
+        public bool PreserveAllFlags;
         public bool ShowLogs = true;
         public List<List<Instruction>> BlocksFind = new List<List<Instruction>>();
         public List<List<Instruction>> BlocksReplace = new List<List<Instruction>>();
-        public string inputFindText = "";
-        public string inputReplaceText = "";
-        public string moduleName = "";
-        public ModuleDefMD module = null;
-        public int ReplacedBlocks = 0;
-        public int EditedMethodsCount = 0;
-        public string logInfo = "";
+        public string InputFindText = "";
+        public string InputReplaceText = "";
+        public string ModuleName = "";
+        public ModuleDefMD Module;
+        public int ReplacedBlocks;
+        public int EditedMethodsCount;
+        public string LogInfo = "";
 
         public MainForm()
         {
@@ -34,35 +34,31 @@ namespace ILReplacer
 
         private void MainForm_Load(object sender, EventArgs e)
         {
-            this.Text = string.Format("ILReplacer v{0} | by ewwink", Application.ProductVersion);
+            Text = $@"ILReplacer v{Application.ProductVersion} | by ewwink";
         }
 
         private void txtFile_DragDrop(object sender, DragEventArgs e)
         {
-            var FileList = (string[])e.Data.GetData(DataFormats.FileDrop, false);
-            if (File.Exists(FileList[0]))
-                txtFile.Text = FileList[0];
+            var fileList = (string[])e.Data.GetData(DataFormats.FileDrop, false);
+            if (File.Exists(fileList[0]))
+                txtFile.Text = fileList[0];
         }
 
         private void txtFile_DragEnter(object sender, DragEventArgs e)
         {
-            if (e.Data.GetDataPresent(DataFormats.FileDrop))
-                e.Effect = DragDropEffects.Copy;
-            else
-                e.Effect = DragDropEffects.None;
+            e.Effect = e.Data.GetDataPresent(DataFormats.FileDrop) ? DragDropEffects.Copy : DragDropEffects.None;
         }
 
         private void MainForm_Resize(object sender, EventArgs e)
         {
-            txtFile.Size = new Size(this.Size.Width - 214, txtFile.Size.Height);
+            txtFile.Size = new Size(Size.Width - 214, txtFile.Size.Height);
         }
 
-        private void selectAll(object sender, KeyEventArgs e)
+        private void SelectAll(object sender, KeyEventArgs e)
         {
             if (e.Control && e.KeyCode == Keys.A)
             {
-                if (sender != null)
-                    ((TextBox)sender).SelectAll();
+                ((TextBox) sender)?.SelectAll();
             }
         }
 
@@ -70,8 +66,8 @@ namespace ILReplacer
         {
             var ofd = new OpenFileDialog
             {
-                Title = "Select File",
-                Filter = "Executables files|*.exe;*.dll|All files (*.*)|*.*"
+                Title = @"Select File",
+                Filter = @"Executables files|*.exe;*.dll|All files (*.*)|*.*"
             };
 
             if (ofd.ShowDialog() == DialogResult.OK)
@@ -80,7 +76,7 @@ namespace ILReplacer
             }
         }
 
-        private void enableControl(bool isEnable)
+        private void EnableControl(bool isEnable)
         {
             Invoke((MethodInvoker)delegate
             {
@@ -88,7 +84,7 @@ namespace ILReplacer
             });
         }
 
-        private void writeStatus(string text)
+        private void WriteStatus(string text)
         {
             Invoke((MethodInvoker)delegate
             {
@@ -103,53 +99,52 @@ namespace ILReplacer
 
         private void btnReplace_Click(object sender, EventArgs e)
         {
-            if (isRunning)
+            if (IsRunning)
                 return;
 
-            moduleName = txtFile.Text.Trim();
-            if (!File.Exists(moduleName))
+            ModuleName = txtFile.Text.Trim();
+            if (!File.Exists(ModuleName))
             {
-                MessageBox.Show("File not Defined or not Exist: " + moduleName, "Warning!",
+                MessageBox.Show(@"File not Defined or not Exist: " + ModuleName, @"Warning!",
                     MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
             if (txtInputFind.Text.Trim() == "" || txtInputReplace.Text.Trim() == "")
             {
-                MessageBox.Show("instructions to Find or Replace is empty!", "Warning!",
+                MessageBox.Show(@"instructions to Find or Replace is empty!", @"Warning!",
                     MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
-            logInfo = "";
-            isRunning = true;
-            lblStatus.Text = "Running..";
-            inputFindText = txtInputFind.Text;
-            inputReplaceText = txtInputReplace.Text;
+            LogInfo = "";
+            IsRunning = true;
+            lblStatus.Text = @"Running..";
+            InputFindText = txtInputFind.Text;
+            InputReplaceText = txtInputReplace.Text;
             ReplacedBlocks = 0;
             EditedMethodsCount = 0;
-            enableControl(false);
-            new Thread(prepareReplace)
+            EnableControl(false);
+            new Thread(PrepareReplace)
             {
                 IsBackground = true
             }.Start();
         }
 
-        private void showFormLog(string text)
+        private void ShowFormLog(string text)
         {
             Invoke((MethodInvoker)delegate
             {
-                this.ShowInTaskbar = false;
-                FormLog frmLog = new FormLog(this);
-                frmLog.txtFormLog.Text = text;
+                ShowInTaskbar = false;
+                var frmLog = new FormLog(this) {txtFormLog = {Text = text}};
                 frmLog.ShowDialog();
-                this.ShowInTaskbar = true;
+                ShowInTaskbar = true;
             });
         }
 
         private OpCode GetOpCodeFromString(string str)
         {
-            string opString = str.Trim().ToLower().Replace(".", "_");
+            var opString = str.Trim().ToLower().Replace(".", "_");
             opString = char.ToUpper(opString[0]) + opString.Substring(1);
             opString = Regex.Replace(opString, @"_[a-z]", (Match match) => match.ToString().ToUpper());
             var opCodeResult = typeof(OpCodes).GetField(opString);
@@ -160,31 +155,31 @@ namespace ILReplacer
 
         private void ReplaceInstructions()
         {
-            string currentBlockNum = "";
+            var currentBlockNum = "";
 
-            foreach (var type in module.GetTypes())
+            foreach (var type in Module.GetTypes())
             {
                 foreach (var method in type.Methods)
                 {
-                    bool isNewMethod = true;
+                    var isNewMethod = true;
                     if (!method.HasBody)
                         continue;
                     var instrs = method.Body.Instructions;
-                    for (int i = 0; i < instrs.Count; i++)
+                    for (var i = 0; i < instrs.Count; i++)
                     {
                         // start replace
-                        for (int B = 0; B < BlocksFind.Count; B++)
+                        for (var b = 0; b < BlocksFind.Count; b++)
                         {
-                            bool isMatched = false;
-                            int j = i;
-                            var blockFind = BlocksFind[B];
+                            var isMatched = false;
+                            var j = i;
+                            var blockFind = BlocksFind[b];
 
                             // check
-                            for (int k = 0; k < blockFind.Count; k++)
+                            foreach (var t in blockFind)
                             {
-                                if (instrs[j].OpCode == blockFind[k].OpCode)
+                                if (instrs[j].OpCode == t.OpCode)
                                 {
-                                    if (blockFind[k].OpCode == OpCodes.Call)
+                                    if (t.OpCode == OpCodes.Call)
                                     {
                                         if (instrs[j].Operand == null)
                                         {
@@ -192,18 +187,12 @@ namespace ILReplacer
                                         }
                                         else
                                         {
-                                            if (instrs[j].Operand.ToString().Contains(blockFind[k].Operand.ToString()))
-                                                isMatched = true;
-                                            else
-                                                isMatched = false;
+                                            isMatched = instrs[j].Operand.ToString().Contains(t.Operand.ToString());
                                         }
                                     }
-                                    else if (blockFind[k].Operand != null)
+                                    else if (t.Operand != null)
                                     {
-                                        if (instrs[j].Operand.ToString().Contains(blockFind[k].Operand.ToString()))
-                                            isMatched = true;
-                                        else
-                                            isMatched = false;
+                                        isMatched = instrs[j].Operand.ToString().Contains(t.Operand.ToString());
                                     }
                                     else
                                         isMatched = true;
@@ -222,38 +211,35 @@ namespace ILReplacer
                                 {
                                     isNewMethod = false;
                                     EditedMethodsCount++;
-                                    logInfo += string.Format(
-                                        "==========================================\r\nMethod: {0} || MDToken: 0x06{1:X6}\r\n",
-                                        method.FullName, method.MDToken.Rid);
+                                    LogInfo +=
+                                        $"==========================================\r\nMethod: {method.FullName} || MDToken: 0x06{method.MDToken.Rid:X6}\r\n";
                                     currentBlockNum = "";
                                 }
-                                if (currentBlockNum != (B + 1).ToString())
+                                if (currentBlockNum != (b + 1).ToString())
                                 {
-                                    currentBlockNum = (B + 1).ToString();
-                                    logInfo += string.Format("\r\nBlock Find and Replace: {0}\r\n", (B + 1));
+                                    currentBlockNum = (b + 1).ToString();
+                                    LogInfo += $"\r\nBlock Find and Replace: {(b + 1)}\r\n";
                                 }
 
                                 // Do replace
                                 j = i;
-                                for (int k = 0; k < blockFind.Count; k++)
+                                for (var k = 0; k < blockFind.Count; k++)
                                 {
-                                    var newOperand = BlocksReplace[B][k].Operand;
+                                    var newOperand = BlocksReplace[b][k].Operand;
                                     if(newOperand.ToString() == "=")
                                     {
-                                        logInfo += string.Format("#{0} --> {1}  {2}  ==>  No Change\r\n",
-                                        j, instrs[j].OpCode, instrs[j].Operand,
-                                        BlocksReplace[B][k].OpCode, newOperand);
+                                        LogInfo +=
+                                            $"#{j} --> {instrs[j].OpCode}  {instrs[j].Operand}  ==>  No Change\r\n";
                                     }
                                     else
                                     {
-                                        if (BlocksReplace[B][k].OpCode == OpCodes.Call)
-                                            newOperand = module.ResolveToken((uint)BlocksReplace[B][k].Operand);
+                                        if (BlocksReplace[b][k].OpCode == OpCodes.Call)
+                                            newOperand = Module.ResolveToken((uint)BlocksReplace[b][k].Operand);
 
-                                        logInfo += string.Format("#{0} --> {1}  {2}  ==>  {3}  {4}\r\n",
-                                            j, instrs[j].OpCode, instrs[j].Operand,
-                                            BlocksReplace[B][k].OpCode, newOperand);
+                                        LogInfo +=
+                                            $"#{j} --> {instrs[j].OpCode}  {instrs[j].Operand}  ==>  {BlocksReplace[b][k].OpCode}  {newOperand}\r\n";
 
-                                        method.Body.Instructions[j].OpCode = BlocksReplace[B][k].OpCode;
+                                        method.Body.Instructions[j].OpCode = BlocksReplace[b][k].OpCode;
                                         method.Body.Instructions[j].Operand = newOperand;
                                     }
 
@@ -270,20 +256,20 @@ namespace ILReplacer
             }
         }
 
-        private bool checkBlocks()
+        private bool CheckBlocks()
         {
-            bool isError = false;
-            string logInfo = "";
+            var isError = false;
+            var logInfo = "";
             var blocksToFind = new List<List<string>>();
             var blocksToReplace = new List<List<string>>();
 
-            foreach (var block in Regex.Split(inputFindText, @"^={3,}", RegexOptions.Multiline))
+            foreach (var block in Regex.Split(InputFindText, @"^={3,}", RegexOptions.Multiline))
             {
                 var instrs = block.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries).ToList();
                 blocksToFind.Add(instrs);
             }
 
-            foreach (var block in Regex.Split(inputReplaceText, @"^={3,}", RegexOptions.Multiline))
+            foreach (var block in Regex.Split(InputReplaceText, @"^={3,}", RegexOptions.Multiline))
             {
                 var instrs = block.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries).ToList();
                 blocksToReplace.Add(instrs);
@@ -292,23 +278,19 @@ namespace ILReplacer
             if (blocksToFind.Count != blocksToReplace.Count)
             {
                 MessageBox.Show(
-                    string.Format("Size of Blocks Find and Replace not Match\r\nBlocks Find: {0}\r\nBlocks Replace: {1}",
-                    blocksToFind.Count, blocksToReplace.Count),
-                    "Blocks Error!", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    $@"Size of Blocks Find and Replace not Match\r\nBlocks Find: {blocksToFind.Count}\r\nBlocks Replace: {blocksToReplace.Count}",
+                    @"Blocks Error!", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 isError = true;
             }
 
             if (!isError)
             {
-                for (int i = 0; i < blocksToFind.Count; i++)
+                for (var i = 0; i < blocksToFind.Count; i++)
                 {
                     if (blocksToFind[i].Count != blocksToReplace[i].Count)
                     {
-                        logInfo += string.Format(
-                            "Error, Block {0} has different size\r\nFind ({1}):\r\n{2}\r\n\r\nReplace ({3}):\r\n{4}\r\n{5}\r\n", i + 1,
-                           blocksToFind[i].Count, string.Join("\r\n", blocksToFind[i].ToArray()),
-                        blocksToReplace[i].Count, string.Join("\r\n", blocksToReplace[i].ToArray()),
-                            "================================================");
+                        logInfo +=
+                            $"Error, Block {i + 1} has different size\r\nFind ({blocksToFind[i].Count}):\r\n{string.Join("\r\n", blocksToFind[i].ToArray())}\r\n\r\nReplace ({blocksToReplace[i].Count}):\r\n{string.Join("\r\n", blocksToReplace[i].ToArray())}\r\n================================================\r\n";
 
                         isError = true;
                     }
@@ -317,26 +299,26 @@ namespace ILReplacer
 
             try
             {
-                module = ModuleDefMD.Load(moduleName);
+                Module = ModuleDefMD.Load(ModuleName);
             }
             catch
             {
-                writeStatus(string.Format("Error Loading \"{0}\" Maybe not .NET Executable", Path.GetFileName(moduleName)));
+                WriteStatus($"Error Loading \"{Path.GetFileName(ModuleName)}\" Maybe not .NET Executable");
                 isError = true;
             }
 
             if (!isError)
             {
-                for (int i = 0; i < blocksToFind.Count; i++)
+                for (var i = 0; i < blocksToFind.Count; i++)
                 {
                     var block = blocksToFind[i];
                     var instructions = new List<Instruction>();
-                    for (int j = 0; j < block.Count; j++)
+                    for (var j = 0; j < block.Count; j++)
                     {
                         var line = block[j];
                         OpCode opCode = null;
-                        Instruction instr = new Instruction();
-                        string[] toInstr = line.Trim().Split(new char[] { ' ', '\t' }, 2);
+                        var instr = new Instruction();
+                        var toInstr = line.Trim().Split(new char[] { ' ', '\t' }, 2);
                         if (toInstr.Length > 0)
                             opCode = GetOpCodeFromString(toInstr[0]);
                         if (opCode != null)
@@ -350,9 +332,8 @@ namespace ILReplacer
                         }
                         else
                         {
-                            logInfo += string.Format(
-                                "\"{0}\" is not valid OpCode, Block Find {1} Line {2}\r\n{3}",
-                                toInstr[0], i + 1, j + 1, line);
+                            logInfo +=
+                                $"\"{toInstr[0]}\" is not valid OpCode, Block Find {i + 1} Line {j + 1}\r\n{line}";
                             isError = true;
                         }
                     }
@@ -363,16 +344,15 @@ namespace ILReplacer
 
             if (!isError)
             {
-                for (int i = 0; i < blocksToReplace.Count; i++)
+                for (var i = 0; i < blocksToReplace.Count; i++)
                 {
                     var block = blocksToReplace[i];
                     var instructions = new List<Instruction>();
-                    for (int j = 0; j < block.Count; j++)
+                    for (var j = 0; j < block.Count; j++)
                     {
                         var line = block[j];
-                        OpCode opCode = null;
-                        Instruction instr = new Instruction();
-                        string[] toInstr = line.Trim().Split(new char[] { ' ', '\t' }, 2);
+                        var instr = new Instruction();
+                        var toInstr = line.Trim().Split(new char[] { ' ', '\t' }, 2);
 
                         if(toInstr[0].Trim() == "=")
                         {
@@ -381,7 +361,7 @@ namespace ILReplacer
                             continue;
                         }
 
-                        opCode = GetOpCodeFromString(toInstr[0]);
+                        var opCode = GetOpCodeFromString(toInstr[0]);
 
                         if (opCode != null)
                         {
@@ -390,22 +370,21 @@ namespace ILReplacer
                             {
                                 if (opCode == OpCodes.Call)
                                 {
-                                    string mdtoken = toInstr[1].Trim().ToUpper();
+                                    var mdtoken = toInstr[1].Trim().ToUpper();
                                     if (mdtoken == "" || !Regex.IsMatch(mdtoken, @"^(0[Xx])?[A-F0-9]{8}$"))
                                         isError = true;
                                     else
                                     {
-                                        uint rid = uint.Parse(mdtoken.ToUpper().Replace("0X", ""), System.Globalization.NumberStyles.HexNumber);
-                                        var isMethod = module.ResolveToken(rid);
+                                        var rid = uint.Parse(mdtoken.ToUpper().Replace("0X", ""), System.Globalization.NumberStyles.HexNumber);
+                                        var isMethod = Module.ResolveToken(rid);
                                         if (isMethod == null)
                                             isError = true;
                                         instr.Operand = rid;
                                     }
 
                                     if (isError)
-                                        logInfo += string.Format(
-                                            "\"{0}\" is invalid Operand/MDToken for \"Call\", Block Replace {1} Line {2}\r\n{3}\r\n{4}\r\n",
-                                            mdtoken, i + 1, j + 1, "The value Should be Hex or MDToken like 06000001 or 0x06000001", line);
+                                        logInfo +=
+                                            $"\"{mdtoken}\" is invalid Operand/MDToken for \"Call\", Block Replace {i + 1} Line {j + 1}\r\nThe value Should be Hex or MDToken like 06000001 or 0x06000001\r\n{line}\r\n";
                                 }
                                 else
                                     instr.Operand = toInstr[1].Trim().Trim('"');
@@ -415,9 +394,8 @@ namespace ILReplacer
                         }
                         else
                         {
-                            logInfo += string.Format(
-                                "\"{0}\" is not valid OpCode, Block Replace {1} Line {2}\r\n{3}",
-                                toInstr[0], i + 1, j + 1, line);
+                            logInfo +=
+                                $"\"{toInstr[0]}\" is not valid OpCode, Block Replace {i + 1} Line {j + 1}\r\n{line}";
                             isError = true;
                         }
                     }
@@ -429,97 +407,91 @@ namespace ILReplacer
             if (isError)
             {
                 if (logInfo != "")
-                    showFormLog(logInfo);
-                enableControl(true);
-                isRunning = false;
-                if (module != null)
-                    module.Dispose();
+                    ShowFormLog(logInfo);
+                EnableControl(true);
+                IsRunning = false;
+                Module?.Dispose();
                 return false;
             }
 
             return true;
         }
 
-        private void prepareReplace()
+        private void PrepareReplace()
         {
-            MetadataFlags AllFlags = MetadataFlags.PreserveAll | MetadataFlags.KeepOldMaxStack
+            var allFlags = MetadataFlags.PreserveAll | MetadataFlags.KeepOldMaxStack
                 | MetadataFlags.AlwaysCreateGuidHeap | MetadataFlags.RoslynSortInterfaceImpl;
 
             try
             {
-                bool isBlockGood = checkBlocks();
+                var isBlockGood = CheckBlocks();
                 if (!isBlockGood)
                     return;
 
-                if (!module.IsILOnly)
+                if (!Module.IsILOnly)
                 {
-                    writeStatus("Info: The Assembly maybe contains unmanaged code");
+                    WriteStatus("Info: The Assembly maybe contains unmanaged code");
                     Thread.Sleep(2000);
                 }
 
-                writeStatus("Processing: " + moduleName);
+                WriteStatus("Processing: " + ModuleName);
 
                 ReplaceInstructions();
 
-                string newName = string.Format("{0}_ILR{1}",
-                    Path.GetFileNameWithoutExtension(moduleName),
-                    Path.GetExtension(moduleName));
+                var newName = $"{Path.GetFileNameWithoutExtension(ModuleName)}_ILR{Path.GetExtension(ModuleName)}";
 
                 if (ReplacedBlocks > 0)
                 {
-                    if (module.IsILOnly)
+                    if (Module.IsILOnly)
                     {
-                        var ManagedOptions = new ModuleWriterOptions(module);
+                        var managedOptions = new ModuleWriterOptions(Module);
                         if (PreserveAllFlags)
-                            ManagedOptions.MetadataOptions.Flags = AllFlags;
+                            managedOptions.MetadataOptions.Flags = allFlags;
 
-                        module.Write(Path.GetDirectoryName(moduleName) + "\\" + newName, ManagedOptions);
+                        Module.Write(Path.GetDirectoryName(ModuleName) + "\\" + newName, managedOptions);
                     }
                     else
                     {
-                        var UnmanagedOptions = new NativeModuleWriterOptions(module, true);
+                        var unmanagedOptions = new NativeModuleWriterOptions(Module, true);
                         if (PreserveAllFlags)
-                            UnmanagedOptions.MetadataOptions.Flags = AllFlags;
+                            unmanagedOptions.MetadataOptions.Flags = allFlags;
 
-                        module.NativeWrite(newName, UnmanagedOptions);
+                        Module.NativeWrite(newName, unmanagedOptions);
                     }
 
                     if (ShowLogs)
                     {
-                        writeStatus(string.Format(
-                            "Done: Saved as {0} || Replaced {1} Blocks Instructions in {2} Methods",
-                            newName, ReplacedBlocks, EditedMethodsCount));
-                        showFormLog(logInfo);
+                        WriteStatus(
+                            $"Done: Saved as {newName} || Replaced {ReplacedBlocks} Blocks Instructions in {EditedMethodsCount} Methods");
+                        ShowFormLog(LogInfo);
                     }
                 }
                 else
-                    writeStatus("Info: No Block Instructions Replaced!");
+                    WriteStatus("Info: No Block Instructions Replaced!");
 
                 //MessageBox.Show("File Saved as:\r\n" + newName, "Replaces Done",
                 //        MessageBoxButtons.OK, MessageBoxIcon.Information);
 
-                if (module != null)
-                    module.Dispose();
+                Module?.Dispose();
 
-                enableControl(true);
-                isRunning = false;
+                EnableControl(true);
+                IsRunning = false;
             }
             catch (Exception ex)
             {
-                if (module != null)
-                    module.Dispose();
+                Module?.Dispose();
 
-                isRunning = false;
+                IsRunning = false;
                 if (ex.Message.Contains("Error calculating max stack"))
-                    writeStatus("Error calculating max stack value..., try Check \"Preserve All Metadata\"");
+                    WriteStatus("Error calculating max stack value..., try Check \"Preserve All Metadata\"");
                 else
                 {
                     if (ex.Message.Length > 100)
-                        showFormLog(ex.Message);
+                        ShowFormLog(ex.Message);
                     else
-                        writeStatus("Error: " + ex.Message.Trim());
+                        WriteStatus("Error: " + ex.Message.Trim());
                 }
-                enableControl(true);
+                EnableControl(true);
             }
         }
 
@@ -537,15 +509,15 @@ namespace ILReplacer
         {
             var sfd = new SaveFileDialog
             {
-                Title = "Save Blocks File",
-                Filter = "ILReplace files|*.ilr|Text files|*.txt|All files (*.*)|*.*"
+                Title = @"Save Blocks File",
+                Filter = @"ILReplace files|*.ilr|Text files|*.txt|All files (*.*)|*.*"
             };
 
             if (sfd.ShowDialog() == DialogResult.OK)
             {
-                string blocksText = txtInputFind.Text.Trim() + "\r\n###########\r\n" + txtInputReplace.Text.Trim();
+                var blocksText = txtInputFind.Text.Trim() + "\r\n###########\r\n" + txtInputReplace.Text.Trim();
                 File.WriteAllText(sfd.FileName, blocksText);
-                writeStatus("Blocks Saved to: " + sfd.FileName);
+                WriteStatus("Blocks Saved to: " + sfd.FileName);
             }
         }
 
@@ -553,37 +525,37 @@ namespace ILReplacer
         {
             var ofd = new OpenFileDialog
             {
-                Title = "Select Blocks File",
-                Filter = "ILReplace files|*.ilr|Text files|*.txt|All files (*.*)|*.*"
+                Title = @"Select Blocks File",
+                Filter = @"ILReplace files|*.ilr|Text files|*.txt|All files (*.*)|*.*"
             };
 
             if (ofd.ShowDialog() == DialogResult.OK)
             {
-                string[] blocksText = File.ReadAllText(ofd.FileName)
-                    .Split(new string[] { "###########" }, StringSplitOptions.None);
+                var blocksText = File.ReadAllText(ofd.FileName)
+                    .Split(new[] { "###########" }, StringSplitOptions.None);
                 if (blocksText.Length > 1)
                 {
                     txtInputFind.Text = blocksText[0].Trim();
                     txtInputReplace.Text = blocksText[1].Trim();
-                    writeStatus("Blocks loaded from: " + ofd.FileName);
+                    WriteStatus("Blocks loaded from: " + ofd.FileName);
                 }
                 else
                 {
-                    writeStatus("Blocks file empty or invalid: " + ofd.FileName);
+                    WriteStatus("Blocks file empty or invalid: " + ofd.FileName);
                 }
             }
         }
 
         private void txtInputFind_TextChanged(object sender, EventArgs e)
         {
-            int blockCount = Regex.Split(txtInputFind.Text, @"^={3,}", RegexOptions.Multiline).Length;
-            lblFindBlocks.Text = "Find Blocks: " + blockCount;
+            var blockCount = Regex.Split(txtInputFind.Text, @"^={3,}", RegexOptions.Multiline).Length;
+            lblFindBlocks.Text = @"Find Blocks: " + blockCount;
         }
 
         private void txtInputReplace_TextChanged(object sender, EventArgs e)
         {
-            int blockCount = Regex.Split(txtInputReplace.Text, @"^={3,}", RegexOptions.Multiline).Length;
-            lblReplaceBlocks.Text = "Replace With Blocks: " + blockCount;
+            var blockCount = Regex.Split(txtInputReplace.Text, @"^={3,}", RegexOptions.Multiline).Length;
+            lblReplaceBlocks.Text = @"Replace With Blocks: " + blockCount;
         }
     }
 }

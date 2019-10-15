@@ -97,7 +97,7 @@
             this.txtInputFind.TabIndex = 4;
             this.txtInputFind.WordWrap = false;
             this.txtInputFind.TextChanged += new System.EventHandler(this.txtInputFind_TextChanged);
-            this.txtInputFind.KeyDown += new System.Windows.Forms.KeyEventHandler(this.selectAll);
+            this.txtInputFind.KeyDown += new System.Windows.Forms.KeyEventHandler(this.SelectAll);
             // 
             // lblReplaceBlocks
             // 
@@ -122,7 +122,7 @@
             this.txtInputReplace.TabIndex = 7;
             this.txtInputReplace.WordWrap = false;
             this.txtInputReplace.TextChanged += new System.EventHandler(this.txtInputReplace_TextChanged);
-            this.txtInputReplace.KeyDown += new System.Windows.Forms.KeyEventHandler(this.selectAll);
+            this.txtInputReplace.KeyDown += new System.Windows.Forms.KeyEventHandler(this.SelectAll);
             // 
             // btnReplace
             // 
