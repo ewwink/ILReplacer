@@ -12,50 +12,49 @@ namespace ILReplacer
 {
     public partial class FormLog : Form
     {
-        public MainForm mForm;
+        public MainForm MainFrm;
         public FormLog(MainForm mf)
         {
             InitializeComponent();
-            mForm = mf;
+            MainFrm = mf;
         }
 
         private void btnFormLogClose_Click(object sender, EventArgs e)
         {
             txtFormLog.Text = "";
-            this.Close();
+            Close();
         }
 
         private void txtFormLog_KeyDown(object sender, KeyEventArgs e)
         {
             if (e.Control && e.KeyCode == Keys.A)
             {
-                if (sender != null)
-                    ((TextBox)sender).SelectAll();
+                ((TextBox) sender)?.SelectAll();
             }
         }
 
         private void FormLog_Load(object sender, EventArgs e)
         {
-            this.Text = string.Format("ILReplacer v{0} Logs | by ewwink", Application.ProductVersion);
-            this.Size = mForm.Size;
-            this.Location = mForm.Location;
+            Text = $@"ILReplacer v{Application.ProductVersion} Logs | by ewwink";
+            Size = MainFrm.Size;
+            Location = MainFrm.Location;
         }
 
         private void FormLog_Resize(object sender, EventArgs e)
         {
             if (WindowState == FormWindowState.Maximized)
-                mForm.WindowState = FormWindowState.Maximized;               
+                MainFrm.WindowState = FormWindowState.Maximized;               
             else
             {
-                mForm.WindowState = FormWindowState.Normal;
-                mForm.Size = this.Size;
+                MainFrm.WindowState = FormWindowState.Normal;
+                MainFrm.Size = Size;
             }
                 
         }
 
         private void FormLog_Move(object sender, EventArgs e)
         {
-            mForm.Location = this.Location;
+            MainFrm.Location = Location;
         }
     }
 }
